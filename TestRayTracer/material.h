@@ -43,10 +43,10 @@ vec3 reflect(const vec3& v, const vec3& n) {
 }
 
 
-vec3 random_in_unit_sphere() {
+vec3 random_in_unit_sphere(const RandAccessor& rand) {
     vec3 p;
     do {
-        p = 2.0*vec3(RandomNumGen::GetRand(), RandomNumGen::GetRand(), RandomNumGen::GetRand()) - vec3(1,1,1);
+        p = 2.0*vec3(rand.Get(), rand.Get(), rand.Get()) - vec3(1,1,1);
     } while (p.squared_length() >= 1.0);
     return p;
 }
@@ -67,32 +67,32 @@ class material  {
 			else 
 				fuzz = 1; 
 		}
-		bool scatter(const ray& r_in, const hit_record& rec, vec3& attenuation, ray& scattered) const
+		bool scatter(const ray& r_in, const hit_record& rec, vec3& attenuation, ray& scattered, const RandAccessor& rand) const
 		{
 			switch (mat_type)
 			{
 			case material_type::lambertian:
-				return lambertian_scatter(r_in, rec, attenuation, scattered);
+				return lambertian_scatter(r_in, rec, attenuation, scattered, rand);
 			case material_type::metal:
-				return metal_scatter(r_in, rec, attenuation, scattered);
+				return metal_scatter(r_in, rec, attenuation, scattered, rand);
 			case material_type::dielectric:
-				return dielectric_scatter(r_in, rec, attenuation, scattered);
+				return dielectric_scatter(r_in, rec, attenuation, scattered, rand);
 			}
 		}
 
-		bool lambertian_scatter(const ray& r_in, const hit_record& rec, vec3& attenuation, ray& scattered) const {
-			vec3 target = rec.p + rec.normal + random_in_unit_sphere();
+		bool lambertian_scatter(const ray& r_in, const hit_record& rec, vec3& attenuation, ray& scattered, const RandAccessor& rand) const {
+			vec3 target = rec.p + rec.normal + random_in_unit_sphere(rand);
 			scattered = ray(rec.p, target - rec.p);
 			attenuation = albedo;
 			return true;
 		}
-		bool metal_scatter(const ray& r_in, const hit_record& rec, vec3& attenuation, ray& scattered) const {
+		bool metal_scatter(const ray& r_in, const hit_record& rec, vec3& attenuation, ray& scattered, const RandAccessor& rand) const {
 			vec3 reflected = reflect(unit_vector(r_in.direction()), rec.normal);
-			scattered = ray(rec.p, reflected + fuzz * random_in_unit_sphere());
+			scattered = ray(rec.p, reflected + fuzz * random_in_unit_sphere(rand));
 			attenuation = albedo;
 			return (dot(scattered.direction(), rec.normal) > 0);
 		}
-		bool dielectric_scatter(const ray& r_in, const hit_record& rec, vec3& attenuation, ray& scattered) const {
+		bool dielectric_scatter(const ray& r_in, const hit_record& rec, vec3& attenuation, ray& scattered, const RandAccessor& rand) const {
 			vec3 outward_normal;
 			vec3 reflected = reflect(r_in.direction(), rec.normal);
 			float ni_over_nt;
@@ -116,7 +116,7 @@ class material  {
 				reflect_prob = schlick(cosine, ref_idx);
 			else
 				reflect_prob = 1.0;
-			if (RandomNumGen::GetRand() < reflect_prob)
+			if (rand.Get() < reflect_prob)
 				scattered = ray(rec.p, reflected);
 			else
 				scattered = ray(rec.p, refracted);

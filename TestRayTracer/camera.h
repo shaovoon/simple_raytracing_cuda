@@ -20,10 +20,10 @@
 
 #define M_PI 3.14159265358979323846264338327950288
 
-vec3 random_in_unit_disk() {
+vec3 random_in_unit_disk(const RandAccessor& rand) {
     vec3 p;
     do {
-        p = 2.0*vec3(RandomNumGen::GetRand(), RandomNumGen::GetRand(),0) - vec3(1,1,0);
+		p = 2.0 * vec3(rand.Get(), rand.Get(), 0) - vec3(1, 1, 0);
     } while (dot(p,p) >= 1.0);
     return p;
 }
@@ -43,8 +43,8 @@ class camera {
             horizontal = 2*half_width*focus_dist*u;
             vertical = 2*half_height*focus_dist*v;
         }
-        ray get_ray(float s, float t) {
-            vec3 rd = lens_radius*random_in_unit_disk();
+		ray get_ray(float s, float t, const RandAccessor& rand) {
+            vec3 rd = lens_radius*random_in_unit_disk(rand);
             vec3 offset = u * rd.x() + v * rd.y();
             return ray(origin + offset, lower_left_corner + s*horizontal + t*vertical - origin - offset); 
         }

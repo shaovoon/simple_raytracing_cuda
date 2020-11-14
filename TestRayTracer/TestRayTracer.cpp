@@ -21,7 +21,6 @@
 #include <iomanip>
 #include <chrono>
 #include <string>
-#include <Windows.h>
 #include <algorithm>
 #include <execution>
 #include <memory>
@@ -48,13 +47,27 @@ private:
 	std::chrono::high_resolution_clock::time_point begin;
 };
 
-vec3 color(const ray& r, std::shared_ptr <hitable>& world, int depth) {
+bool world_hit(std::vector <sphere>& world, const ray& r, float tmin, float tmax, hit_record& rec){
+	hit_record temp_rec;
+	bool hit_anything = false;
+	double closest_so_far = tmax;
+	for (int i = 0; i < world.size(); i++) {
+		if (world[i].hit(r, tmin, closest_so_far, temp_rec)) {
+			hit_anything = true;
+			closest_so_far = temp_rec.t;
+			rec = temp_rec;
+		}
+	}
+	return hit_anything;
+}
+
+vec3 color(const ray& r, std::vector <sphere>& world, int depth, const RandAccessor& rand) {
 	hit_record rec;
-	if (world->hit(r, 0.001, FLT_MAX, rec)) {
+	if (world_hit(world, r, 0.001, FLT_MAX, rec)) {
 		ray scattered;
 		vec3 attenuation;
-		if (depth < 50 && rec.mat->scatter(r, rec, attenuation, scattered)) {
-			return attenuation * color(scattered, world, depth + 1);
+		if (depth < 50 && rec.mat->scatter(r, rec, attenuation, scattered, rand)) {
+			return attenuation * color(scattered, world, depth + 1, rand);
 		}
 		else {
 			return vec3(0, 0, 0);
@@ -68,9 +81,9 @@ vec3 color(const ray& r, std::shared_ptr <hitable>& world, int depth) {
 }
 
 
-std::shared_ptr <hitable>  random_scene() {
-	std::vector<std::shared_ptr <hitable> > list;
-	list.push_back(std::shared_ptr<sphere>(new sphere(vec3(0, -1000, 0), 1000, material(material_type::lambertian,  vec3(0.5, 0.5, 0.5), 0.0f, 0.0f))));
+std::vector<sphere>  random_scene() {
+	std::vector<sphere> list;
+	list.push_back(sphere(vec3(0, -1000, 0), 1000, material(material_type::lambertian,  vec3(0.5, 0.5, 0.5), 0.0f, 0.0f)));
 	int i = 1;
 	for (int a = -11; a < 11; a++) {
 		for (int b = -11; b < 11; b++) {
@@ -78,24 +91,24 @@ std::shared_ptr <hitable>  random_scene() {
 			vec3 center(a + 0.9 * RandomNumGen::GetRand(), 0.2, b + 0.9 * RandomNumGen::GetRand());
 			if ((center - vec3(4, 0.2, 0)).length() > 0.9) {
 				if (choose_mat < 0.8) {  // diffuse
-					list.push_back(std::shared_ptr<sphere>(new sphere(center, 0.2, material(material_type::lambertian, vec3(RandomNumGen::GetRand() * RandomNumGen::GetRand(), RandomNumGen::GetRand() * RandomNumGen::GetRand(), RandomNumGen::GetRand() * RandomNumGen::GetRand()), 0.0f, 0.0f))));
+					list.push_back(sphere(center, 0.2, material(material_type::lambertian, vec3(RandomNumGen::GetRand() * RandomNumGen::GetRand(), RandomNumGen::GetRand() * RandomNumGen::GetRand(), RandomNumGen::GetRand() * RandomNumGen::GetRand()), 0.0f, 0.0f)));
 				}
 				else if (choose_mat < 0.95) { // metal
-					list.push_back(std::shared_ptr<sphere>(new sphere(center, 0.2,
-						material(material_type::metal, vec3(0.5 * (1 + RandomNumGen::GetRand()), 0.5 * (1 + RandomNumGen::GetRand()), 0.5 * (1 + RandomNumGen::GetRand())), 0.5 * RandomNumGen::GetRand(), 0.0f))));
+					list.push_back(sphere(center, 0.2,
+						material(material_type::metal, vec3(0.5 * (1 + RandomNumGen::GetRand()), 0.5 * (1 + RandomNumGen::GetRand()), 0.5 * (1 + RandomNumGen::GetRand())), 0.5 * RandomNumGen::GetRand(), 0.0f)));
 				}
 				else {  // glass
-					list.push_back(std::shared_ptr<sphere>(new sphere(center, 0.2, material(material_type::dielectric, vec3(), 0.0f, 1.5))));
+					list.push_back(sphere(center, 0.2, material(material_type::dielectric, vec3(), 0.0f, 1.5)));
 				}
 			}
 		}
 	}
 
-	list.push_back(std::shared_ptr<sphere>(new sphere(vec3(0, 1, 0), 1.0, material(material_type::dielectric, vec3(), 0.0f, 1.5))));
-	list.push_back(std::shared_ptr<sphere>(new sphere(vec3(-4, 1, 0), 1.0, material(material_type::lambertian, vec3(0.4, 0.2, 0.1), 0.0f, 0.0f))));
-	list.push_back(std::shared_ptr<sphere>(new sphere(vec3(4, 1, 0), 1.0, material(material_type::metal, vec3(0.7, 0.6, 0.5), 0.0, 0.0))));
+	list.push_back(sphere(vec3(0, 1, 0), 1.0, material(material_type::dielectric, vec3(), 0.0f, 1.5)));
+	list.push_back(sphere(vec3(-4, 1, 0), 1.0, material(material_type::lambertian, vec3(0.4, 0.2, 0.1), 0.0f, 0.0f)));
+	list.push_back(sphere(vec3(4, 1, 0), 1.0, material(material_type::metal, vec3(0.7, 0.6, 0.5), 0.0, 0.0)));
 
-	return std::shared_ptr <hitable_list>(new hitable_list(list));
+	return list;
 }
 
 int main() {
@@ -103,14 +116,16 @@ int main() {
 	int ny = 256;
 	int ns = 50;
 
-	std::vector<std::shared_ptr <hitable> > list;
+	timer stopwatch;
+	stopwatch.start("ray_tracer_init");
+
+	std::vector<sphere> world;
 	float R = cos(M_PI / 4);
-	list.push_back(std::shared_ptr<sphere>(new sphere(vec3(0, 0, -1), 0.5, material(material_type::lambertian, vec3(0.1, 0.2, 0.5), 0.0f, 0.0f))));
-	list.push_back(std::shared_ptr<sphere>(new sphere(vec3(0, -100.5, -1), 100, material(material_type::lambertian, vec3(0.8, 0.8, 0.0), 0.0f, 0.0f))));
-	list.push_back(std::shared_ptr<sphere>(new sphere(vec3(1, 0, -1), 0.5, material(material_type::metal, vec3(0.8, 0.6, 0.2), 0.0, 0.0f))));
-	list.push_back(std::shared_ptr<sphere>(new sphere(vec3(-1, 0, -1), 0.5, material(material_type::dielectric, vec3(), 0.0f, 1.5))));
-	list.push_back(std::shared_ptr<sphere>(new sphere(vec3(-1, 0, -1), -0.45, material(material_type::dielectric, vec3(), 0.0f, 1.5))));
-	std::shared_ptr <hitable> world = std::shared_ptr <hitable_list>(new hitable_list(list));
+	world.push_back(sphere(vec3(0, 0, -1), 0.5, material(material_type::lambertian, vec3(0.1, 0.2, 0.5), 0.0f, 0.0f)));
+	world.push_back(sphere(vec3(0, -100.5, -1), 100, material(material_type::lambertian, vec3(0.8, 0.8, 0.0), 0.0f, 0.0f)));
+	world.push_back(sphere(vec3(1, 0, -1), 0.5, material(material_type::metal, vec3(0.8, 0.6, 0.2), 0.0, 0.0f)));
+	world.push_back(sphere(vec3(-1, 0, -1), 0.5, material(material_type::dielectric, vec3(), 0.0f, 1.5)));
+	world.push_back(sphere(vec3(-1, 0, -1), -0.45, material(material_type::dielectric, vec3(), 0.0f, 1.5)));
 	world = random_scene();
 
 	vec3 lookfrom(13, 2, 3);
@@ -133,20 +148,27 @@ int main() {
 		}
 	}
 
+	PreGenerated preGenerated(5000);
+	const auto& vec = preGenerated.GetVector();
+	const float* arr = vec.data();
+	size_t rand_size = vec.size();
 
-	timer stopwatch;
+	stopwatch.stop();
+
 	stopwatch.start("ray_tracer");
 
 	std::for_each(std::execution::par, pixelsSrc.begin(), pixelsSrc.end(), [&](unsigned int& pixel) {
+		RandAccessor rand(0, arr, rand_size);
+
 		int j = pixel & 0xffff;
 		int i = (pixel & 0xffff0000) >> 16;
 
 		vec3 col(0, 0, 0);
 		for (int s = 0; s < ns; s++) {
-			float u = float(i + RandomNumGen::GetRand()) / float(nx);
-			float v = float(j + RandomNumGen::GetRand()) / float(ny);
-			ray r = cam.get_ray(u, v);
-			col += color(r, world, 0);
+			float u = float(i + rand.Get()) / float(nx);
+			float v = float(j + rand.Get()) / float(ny);
+			ray r = cam.get_ray(u, v, rand);
+			col += color(r, world, 0, rand);
 		}
 		col /= float(ns);
 		col = vec3(sqrt(col[0]), sqrt(col[1]), sqrt(col[2]));
