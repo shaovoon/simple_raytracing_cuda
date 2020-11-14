@@ -23,7 +23,7 @@ struct hit_record
     float t;  
     vec3 p;
     vec3 normal; 
-	std::shared_ptr <material> mat_ptr;
+	const material* mat;
 };
 
 class hitable  {

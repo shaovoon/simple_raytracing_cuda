@@ -53,7 +53,7 @@ vec3 color(const ray& r, std::shared_ptr <hitable>& world, int depth) {
 	if (world->hit(r, 0.001, FLT_MAX, rec)) {
 		ray scattered;
 		vec3 attenuation;
-		if (depth < 50 && rec.mat_ptr->scatter(r, rec, attenuation, scattered)) {
+		if (depth < 50 && rec.mat->scatter(r, rec, attenuation, scattered)) {
 			return attenuation * color(scattered, world, depth + 1);
 		}
 		else {
@@ -70,7 +70,7 @@ vec3 color(const ray& r, std::shared_ptr <hitable>& world, int depth) {
 
 std::shared_ptr <hitable>  random_scene() {
 	std::vector<std::shared_ptr <hitable> > list;
-	list.push_back(std::shared_ptr<sphere>(new sphere(vec3(0, -1000, 0), 1000, std::shared_ptr<lambertian>(new lambertian(vec3(0.5, 0.5, 0.5))))));
+	list.push_back(std::shared_ptr<sphere>(new sphere(vec3(0, -1000, 0), 1000, material(material_type::lambertian,  vec3(0.5, 0.5, 0.5), 0.0f, 0.0f))));
 	int i = 1;
 	for (int a = -11; a < 11; a++) {
 		for (int b = -11; b < 11; b++) {
@@ -78,22 +78,22 @@ std::shared_ptr <hitable>  random_scene() {
 			vec3 center(a + 0.9 * RandomNumGen::GetRand(), 0.2, b + 0.9 * RandomNumGen::GetRand());
 			if ((center - vec3(4, 0.2, 0)).length() > 0.9) {
 				if (choose_mat < 0.8) {  // diffuse
-					list.push_back(std::shared_ptr<sphere>(new sphere(center, 0.2, std::shared_ptr<lambertian>(new lambertian(vec3(RandomNumGen::GetRand() * RandomNumGen::GetRand(), RandomNumGen::GetRand() * RandomNumGen::GetRand(), RandomNumGen::GetRand() * RandomNumGen::GetRand()))))));
+					list.push_back(std::shared_ptr<sphere>(new sphere(center, 0.2, material(material_type::lambertian, vec3(RandomNumGen::GetRand() * RandomNumGen::GetRand(), RandomNumGen::GetRand() * RandomNumGen::GetRand(), RandomNumGen::GetRand() * RandomNumGen::GetRand()), 0.0f, 0.0f))));
 				}
 				else if (choose_mat < 0.95) { // metal
 					list.push_back(std::shared_ptr<sphere>(new sphere(center, 0.2,
-						std::shared_ptr<metal>(new metal(vec3(0.5 * (1 + RandomNumGen::GetRand()), 0.5 * (1 + RandomNumGen::GetRand()), 0.5 * (1 + RandomNumGen::GetRand())), 0.5 * RandomNumGen::GetRand())))));
+						material(material_type::metal, vec3(0.5 * (1 + RandomNumGen::GetRand()), 0.5 * (1 + RandomNumGen::GetRand()), 0.5 * (1 + RandomNumGen::GetRand())), 0.5 * RandomNumGen::GetRand(), 0.0f))));
 				}
 				else {  // glass
-					list.push_back(std::shared_ptr<sphere>(new sphere(center, 0.2, std::shared_ptr<dielectric>(new dielectric(1.5)))));
+					list.push_back(std::shared_ptr<sphere>(new sphere(center, 0.2, material(material_type::dielectric, vec3(), 0.0f, 1.5))));
 				}
 			}
 		}
 	}
 
-	list.push_back(std::shared_ptr<sphere>(new sphere(vec3(0, 1, 0), 1.0, std::shared_ptr<dielectric>(new dielectric(1.5)))));
-	list.push_back(std::shared_ptr<sphere>(new sphere(vec3(-4, 1, 0), 1.0, std::shared_ptr<lambertian>(new lambertian(vec3(0.4, 0.2, 0.1))))));
-	list.push_back(std::shared_ptr<sphere>(new sphere(vec3(4, 1, 0), 1.0, std::shared_ptr<metal>(new metal(vec3(0.7, 0.6, 0.5), 0.0)))));
+	list.push_back(std::shared_ptr<sphere>(new sphere(vec3(0, 1, 0), 1.0, material(material_type::dielectric, vec3(), 0.0f, 1.5))));
+	list.push_back(std::shared_ptr<sphere>(new sphere(vec3(-4, 1, 0), 1.0, material(material_type::lambertian, vec3(0.4, 0.2, 0.1), 0.0f, 0.0f))));
+	list.push_back(std::shared_ptr<sphere>(new sphere(vec3(4, 1, 0), 1.0, material(material_type::metal, vec3(0.7, 0.6, 0.5), 0.0, 0.0))));
 
 	return std::shared_ptr <hitable_list>(new hitable_list(list));
 }
@@ -105,11 +105,11 @@ int main() {
 
 	std::vector<std::shared_ptr <hitable> > list;
 	float R = cos(M_PI / 4);
-	list.push_back(std::shared_ptr<sphere>(new sphere(vec3(0, 0, -1), 0.5, std::shared_ptr<lambertian>(new lambertian(vec3(0.1, 0.2, 0.5))))));
-	list.push_back(std::shared_ptr<sphere>(new sphere(vec3(0, -100.5, -1), 100, std::shared_ptr<lambertian>(new lambertian(vec3(0.8, 0.8, 0.0))))));
-	list.push_back(std::shared_ptr<sphere>(new sphere(vec3(1, 0, -1), 0.5, std::shared_ptr<metal>(new metal(vec3(0.8, 0.6, 0.2), 0.0)))));
-	list.push_back(std::shared_ptr<sphere>(new sphere(vec3(-1, 0, -1), 0.5, std::shared_ptr<dielectric>(new dielectric(1.5)))));
-	list.push_back(std::shared_ptr<sphere>(new sphere(vec3(-1, 0, -1), -0.45, std::shared_ptr<dielectric>(new dielectric(1.5)))));
+	list.push_back(std::shared_ptr<sphere>(new sphere(vec3(0, 0, -1), 0.5, material(material_type::lambertian, vec3(0.1, 0.2, 0.5), 0.0f, 0.0f))));
+	list.push_back(std::shared_ptr<sphere>(new sphere(vec3(0, -100.5, -1), 100, material(material_type::lambertian, vec3(0.8, 0.8, 0.0), 0.0f, 0.0f))));
+	list.push_back(std::shared_ptr<sphere>(new sphere(vec3(1, 0, -1), 0.5, material(material_type::metal, vec3(0.8, 0.6, 0.2), 0.0, 0.0f))));
+	list.push_back(std::shared_ptr<sphere>(new sphere(vec3(-1, 0, -1), 0.5, material(material_type::dielectric, vec3(), 0.0f, 1.5))));
+	list.push_back(std::shared_ptr<sphere>(new sphere(vec3(-1, 0, -1), -0.45, material(material_type::dielectric, vec3(), 0.0f, 1.5))));
 	std::shared_ptr <hitable> world = std::shared_ptr <hitable_list>(new hitable_list(list));
 	world = random_scene();
 
