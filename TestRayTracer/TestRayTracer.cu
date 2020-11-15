@@ -116,7 +116,7 @@ private:
 class vec3 {
 
 public:
-	__host__ __device__ vec3() { e[0] = 0.0; e[1] = 0.0; e[2] = 0.0; }
+	__host__ __device__ vec3() { /* e[0] = 0.0; e[1] = 0.0; e[2] = 0.0; */ }
 	__host__ __device__ vec3(float e0, float e1, float e2) { e[0] = e0; e[1] = e1; e[2] = e2; }
 	__host__ __device__ inline float x() const { return e[0]; }
 	__host__ __device__ inline float y() const { return e[1]; }
@@ -500,7 +500,8 @@ __device__ vec3 color(const ray& r, sphere* world, size_t world_size, int depth,
 */
 
 __device__ vec3 color_loop(const ray& r, sphere* world, size_t world_size, const RandAccessor& rand) {
-	vec3 attenuation_result;
+	vec3 attenuation_result(1.0,1.0,1.0);
+	bool assigned = false;
 	ray temp = r;
 	for(int i=0; i<50; ++i)
 	{
@@ -510,8 +511,11 @@ __device__ vec3 color_loop(const ray& r, sphere* world, size_t world_size, const
 			vec3 attenuation;
 			if (rec.mat->scatter(temp, rec, attenuation, scattered, rand)) {
 				temp = scattered;
-				if(attenuation_result == vec3(0, 0, 0))
+				if(assigned == false)
+				{
 					attenuation_result = attenuation;
+					assigned = true;
+				}
 				else
 					attenuation_result *= attenuation;
 			}
@@ -607,11 +611,11 @@ __global__ void raytrace(float* dev_arr, size_t* dev_arr_size, sphere* dev_spher
 }
 
 int main() {
-	int nx = 512;
-	int ny = 512;
-	int ns = 200;
+	int nx = 256;
+	int ny = 256;
+	int ns = 50;
 
-	//timer stopwatch;
+	timer stopwatch;
 	//stopwatch.start("ray_tracer_init");
 
 	std::vector<sphere> world;
@@ -786,7 +790,7 @@ int main() {
 
 	//stopwatch.stop();
 
-	//stopwatch.start("ray_tracer");
+	stopwatch.start("ray_tracer");
 
 	/*
 	std::for_each(std::execution::par, pixelsSrc.begin(), pixelsSrc.end(), [&](unsigned int& pixel) {
@@ -844,7 +848,7 @@ int main() {
 	cudaFree(dev_ns);
 
 
-	//stopwatch.stop();
+	stopwatch.stop();
 
 	int channels = 4;
 	stbi_write_png("c:\\temp\\ray_trace.png", nx, ny, channels, pixelsSrc.data(), nx * channels);
