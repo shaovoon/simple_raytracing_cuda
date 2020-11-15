@@ -15,7 +15,6 @@
 struct hit_record;
 
 #include "ray.h"
-#include "hitable.h"
 #include "RandomNumGen.h"
 
 
@@ -50,6 +49,16 @@ vec3 random_in_unit_sphere(const RandAccessor& rand) {
     } while (p.squared_length() >= 1.0);
     return p;
 }
+
+class material;
+
+struct hit_record
+{
+	float t;
+	vec3 p;
+	vec3 normal;
+	const material* mat;
+};
 
 enum class material_type
 {

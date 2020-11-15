@@ -11,7 +11,6 @@
 
 #include <iostream>
 #include "sphere.h"
-#include "hitable_list.h"
 #include <cfloat>
 #include "camera.h"
 #include "material.h"
@@ -158,10 +157,10 @@ int main() {
 	stopwatch.start("ray_tracer");
 
 	std::for_each(std::execution::par, pixelsSrc.begin(), pixelsSrc.end(), [&](unsigned int& pixel) {
-		RandAccessor rand(0, arr, rand_size);
-
 		int j = pixel & 0xffff;
 		int i = (pixel & 0xffff0000) >> 16;
+
+		RandAccessor rand(j+i, arr, rand_size);
 
 		vec3 col(0, 0, 0);
 		for (int s = 0; s < ns; s++) {

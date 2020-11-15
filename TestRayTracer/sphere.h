@@ -12,14 +12,13 @@
 #ifndef SPHEREH
 #define SPHEREH
 
-#include "hitable.h"
 #include "material.h"
 
-class sphere: public hitable  {
+class sphere  {
     public:
         sphere() = default;
         sphere(vec3 cen, float r, material m) : center(cen), radius(r), mat(m)  {};
-        virtual bool hit(const ray& r, float tmin, float tmax, hit_record& rec) const;
+        bool hit(const ray& r, float tmin, float tmax, hit_record& rec) const;
         vec3 center;
         float radius;
         material mat;
