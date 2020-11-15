@@ -9,6 +9,7 @@
 // with this software. If not, see <http://creativecommons.org/publicdomain/zero/1.0/>.
 //==================================================================================================
 
+#include <cuda_runtime.h>
 #include <iostream>
 #include <cfloat>
 #define STB_IMAGE_WRITE_IMPLEMENTATION
@@ -17,7 +18,7 @@
 #include <chrono>
 #include <string>
 #include <algorithm>
-#include <execution>
+//#include <execution>
 #include <memory>
 #define _USE_MATH_DEFINES
 #include <cmath>
@@ -93,13 +94,13 @@ private:
 class RandAccessor
 {
 public:
-	RandAccessor(size_t offset_, const float* arr_, size_t size_)
+	__device__ RandAccessor(size_t offset_, const float* arr_, size_t size_)
 		: offset(offset_)
 		, arr(arr_)
 		, size(size_)
 		, index(0)
 	{}
-	float Get() const
+	__device__ float Get() const
 	{
 		size_t i = (offset + index) % size;
 		++index;
@@ -115,125 +116,126 @@ private:
 class vec3 {
 
 public:
-	vec3() {}
-	vec3(float e0, float e1, float e2) { e[0] = e0; e[1] = e1; e[2] = e2; }
-	inline float x() const { return e[0]; }
-	inline float y() const { return e[1]; }
-	inline float z() const { return e[2]; }
-	inline float r() const { return e[0]; }
-	inline float g() const { return e[1]; }
-	inline float b() const { return e[2]; }
+	__host__ __device__ vec3() { e[0] = 0.0; e[1] = 0.0; e[2] = 0.0; }
+	__host__ __device__ vec3(float e0, float e1, float e2) { e[0] = e0; e[1] = e1; e[2] = e2; }
+	__host__ __device__ inline float x() const { return e[0]; }
+	__host__ __device__ inline float y() const { return e[1]; }
+	__host__ __device__ inline float z() const { return e[2]; }
+	__host__ __device__ inline float r() const { return e[0]; }
+	__host__ __device__ inline float g() const { return e[1]; }
+	__host__ __device__ inline float b() const { return e[2]; }
 
-	inline const vec3& operator+() const { return *this; }
-	inline vec3 operator-() const { return vec3(-e[0], -e[1], -e[2]); }
-	inline float operator[](int i) const { return e[i]; }
-	inline float& operator[](int i) { return e[i]; }
+	__host__ __device__ inline const vec3& operator+() const { return *this; }
+	__host__ __device__ inline vec3 operator-() const { return vec3(-e[0], -e[1], -e[2]); }
+	__host__ __device__ inline float operator[](int i) const { return e[i]; }
+	__host__ __device__ inline float& operator[](int i) { return e[i]; }
 
-	inline vec3& operator+=(const vec3& v2);
-	inline vec3& operator-=(const vec3& v2);
-	inline vec3& operator*=(const vec3& v2);
-	inline vec3& operator/=(const vec3& v2);
-	inline vec3& operator*=(const float t);
-	inline vec3& operator/=(const float t);
+	__host__ __device__ inline vec3& operator+=(const vec3& v2);
+	__host__ __device__ inline vec3& operator-=(const vec3& v2);
+	__host__ __device__ inline vec3& operator*=(const vec3& v2);
+	__host__ __device__ inline vec3& operator/=(const vec3& v2);
+	__host__ __device__ inline vec3& operator*=(const float t);
+	__host__ __device__ inline vec3& operator/=(const float t);
+	__host__ __device__ inline bool operator==(const vec3& v2);
 
-	inline float length() const { return sqrt(e[0] * e[0] + e[1] * e[1] + e[2] * e[2]); }
-	inline float squared_length() const { return e[0] * e[0] + e[1] * e[1] + e[2] * e[2]; }
-	inline void make_unit_vector();
+	__host__ __device__ inline float length() const { return sqrt(e[0] * e[0] + e[1] * e[1] + e[2] * e[2]); }
+	__host__ __device__ inline float squared_length() const { return e[0] * e[0] + e[1] * e[1] + e[2] * e[2]; }
+	__host__ __device__ inline void make_unit_vector();
 
 	float e[3];
 };
 
 
 
-inline std::istream& operator>>(std::istream& is, vec3& t) {
+__host__ __device__ inline std::istream& operator>>(std::istream& is, vec3& t) {
 	is >> t.e[0] >> t.e[1] >> t.e[2];
 	return is;
 }
 
-inline std::ostream& operator<<(std::ostream& os, const vec3& t) {
+__host__ __device__ inline std::ostream& operator<<(std::ostream& os, const vec3& t) {
 	os << t.e[0] << " " << t.e[1] << " " << t.e[2];
 	return os;
 }
 
-inline void vec3::make_unit_vector() {
+__host__ __device__ inline void vec3::make_unit_vector() {
 	float k = 1.0 / sqrt(e[0] * e[0] + e[1] * e[1] + e[2] * e[2]);
 	e[0] *= k; e[1] *= k; e[2] *= k;
 }
 
-inline vec3 operator+(const vec3& v1, const vec3& v2) {
+__host__ __device__ inline vec3 operator+(const vec3& v1, const vec3& v2) {
 	return vec3(v1.e[0] + v2.e[0], v1.e[1] + v2.e[1], v1.e[2] + v2.e[2]);
 }
 
-inline vec3 operator-(const vec3& v1, const vec3& v2) {
+__host__ __device__ inline vec3 operator-(const vec3& v1, const vec3& v2) {
 	return vec3(v1.e[0] - v2.e[0], v1.e[1] - v2.e[1], v1.e[2] - v2.e[2]);
 }
 
-inline vec3 operator*(const vec3& v1, const vec3& v2) {
+__host__ __device__ inline vec3 operator*(const vec3& v1, const vec3& v2) {
 	return vec3(v1.e[0] * v2.e[0], v1.e[1] * v2.e[1], v1.e[2] * v2.e[2]);
 }
 
-inline vec3 operator/(const vec3& v1, const vec3& v2) {
+__host__ __device__ inline vec3 operator/(const vec3& v1, const vec3& v2) {
 	return vec3(v1.e[0] / v2.e[0], v1.e[1] / v2.e[1], v1.e[2] / v2.e[2]);
 }
 
-inline vec3 operator*(float t, const vec3& v) {
+__host__ __device__ inline vec3 operator*(float t, const vec3& v) {
 	return vec3(t * v.e[0], t * v.e[1], t * v.e[2]);
 }
 
-inline vec3 operator/(vec3 v, float t) {
+__host__ __device__ inline vec3 operator/(vec3 v, float t) {
 	return vec3(v.e[0] / t, v.e[1] / t, v.e[2] / t);
 }
 
-inline vec3 operator*(const vec3& v, float t) {
+__host__ __device__ inline vec3 operator*(const vec3& v, float t) {
 	return vec3(t * v.e[0], t * v.e[1], t * v.e[2]);
 }
 
-inline float dot(const vec3& v1, const vec3& v2) {
+__host__ __device__ inline float dot(const vec3& v1, const vec3& v2) {
 	return v1.e[0] * v2.e[0] + v1.e[1] * v2.e[1] + v1.e[2] * v2.e[2];
 }
 
-inline vec3 cross(const vec3& v1, const vec3& v2) {
+__host__ __device__ inline vec3 cross(const vec3& v1, const vec3& v2) {
 	return vec3((v1.e[1] * v2.e[2] - v1.e[2] * v2.e[1]),
 		(-(v1.e[0] * v2.e[2] - v1.e[2] * v2.e[0])),
 		(v1.e[0] * v2.e[1] - v1.e[1] * v2.e[0]));
 }
 
-inline vec3& vec3::operator+=(const vec3& v) {
+__host__ __device__ inline vec3& vec3::operator+=(const vec3& v) {
 	e[0] += v.e[0];
 	e[1] += v.e[1];
 	e[2] += v.e[2];
 	return *this;
 }
 
-inline vec3& vec3::operator*=(const vec3& v) {
+__host__ __device__ inline vec3& vec3::operator*=(const vec3& v) {
 	e[0] *= v.e[0];
 	e[1] *= v.e[1];
 	e[2] *= v.e[2];
 	return *this;
 }
 
-inline vec3& vec3::operator/=(const vec3& v) {
+__host__ __device__ inline vec3& vec3::operator/=(const vec3& v) {
 	e[0] /= v.e[0];
 	e[1] /= v.e[1];
 	e[2] /= v.e[2];
 	return *this;
 }
 
-inline vec3& vec3::operator-=(const vec3& v) {
+__host__ __device__ inline vec3& vec3::operator-=(const vec3& v) {
 	e[0] -= v.e[0];
 	e[1] -= v.e[1];
 	e[2] -= v.e[2];
 	return *this;
 }
 
-inline vec3& vec3::operator*=(const float t) {
+__host__ __device__ inline vec3& vec3::operator*=(const float t) {
 	e[0] *= t;
 	e[1] *= t;
 	e[2] *= t;
 	return *this;
 }
 
-inline vec3& vec3::operator/=(const float t) {
+__host__ __device__ inline vec3& vec3::operator/=(const float t) {
 	float k = 1.0 / t;
 
 	e[0] *= k;
@@ -242,24 +244,29 @@ inline vec3& vec3::operator/=(const float t) {
 	return *this;
 }
 
-inline vec3 unit_vector(vec3 v) {
+__host__ __device__ inline bool vec3::operator==(const vec3& v) {
+	return (e[0] == v.e[0] && e[1] == v.e[1] && e[2] == v.e[2]);
+}
+
+
+__host__ __device__ inline vec3 unit_vector(vec3 v) {
 	return v / v.length();
 }
 
 class ray
 {
 public:
-	ray() {}
-	ray(const vec3& a, const vec3& b) { A = a; B = b; }
-	vec3 origin() const { return A; }
-	vec3 direction() const { return B; }
-	vec3 point_at_parameter(float t) const { return A + t * B; }
+	__host__ __device__ ray() {}
+	__host__ __device__ ray(const vec3& a, const vec3& b) { A = a; B = b; }
+	__host__ __device__ vec3 origin() const { return A; }
+	__host__ __device__ vec3 direction() const { return B; }
+	__host__ __device__ vec3 point_at_parameter(float t) const { return A + t * B; }
 
 	vec3 A;
 	vec3 B;
 };
 
-vec3 random_in_unit_disk(const RandAccessor& rand) {
+__device__ vec3 random_in_unit_disk(const RandAccessor& rand) {
 	vec3 p;
 	do {
 		p = 2.0 * vec3(rand.Get(), rand.Get(), 0) - vec3(1, 1, 0);
@@ -282,7 +289,7 @@ public:
 		horizontal = 2 * half_width * focus_dist * u;
 		vertical = 2 * half_height * focus_dist * v;
 	}
-	ray get_ray(float s, float t, const RandAccessor& rand) {
+	__device__ ray get_ray(float s, float t, const RandAccessor& rand) {
 		vec3 rd = lens_radius * random_in_unit_disk(rand);
 		vec3 offset = u * rd.x() + v * rd.y();
 		return ray(origin + offset, lower_left_corner + s * horizontal + t * vertical - origin - offset);
@@ -298,13 +305,13 @@ public:
 
 struct hit_record;
 
-float schlick(float cosine, float ref_idx) {
+__device__ float schlick(float cosine, float ref_idx) {
 	float r0 = (1 - ref_idx) / (1 + ref_idx);
 	r0 = r0 * r0;
-	return r0 + (1 - r0) * pow((1 - cosine), 5);
+	return r0 + (1 - r0) * powf((1 - cosine), 5);
 }
 
-bool refract(const vec3& v, const vec3& n, float ni_over_nt, vec3& refracted) {
+__device__ bool refract(const vec3& v, const vec3& n, float ni_over_nt, vec3& refracted) {
 	vec3 uv = unit_vector(v);
 	float dt = dot(uv, n);
 	float discriminant = 1.0 - ni_over_nt * ni_over_nt * (1 - dt * dt);
@@ -317,12 +324,12 @@ bool refract(const vec3& v, const vec3& n, float ni_over_nt, vec3& refracted) {
 }
 
 
-vec3 reflect(const vec3& v, const vec3& n) {
+__device__ vec3 reflect(const vec3& v, const vec3& n) {
 	return v - 2 * dot(v, n) * n;
 }
 
 
-vec3 random_in_unit_sphere(const RandAccessor& rand) {
+__device__ vec3 random_in_unit_sphere(const RandAccessor& rand) {
 	vec3 p;
 	do {
 		p = 2.0 * vec3(rand.Get(), rand.Get(), rand.Get()) - vec3(1, 1, 1);
@@ -356,7 +363,7 @@ public:
 		else
 			fuzz = 1;
 	}
-	bool scatter(const ray& r_in, const hit_record& rec, vec3& attenuation, ray& scattered, const RandAccessor& rand) const
+	__device__ bool scatter(const ray& r_in, const hit_record& rec, vec3& attenuation, ray& scattered, const RandAccessor& rand) const
 	{
 		switch (mat_type)
 		{
@@ -367,21 +374,22 @@ public:
 		case material_type::dielectric:
 			return dielectric_scatter(r_in, rec, attenuation, scattered, rand);
 		}
+		return lambertian_scatter(r_in, rec, attenuation, scattered, rand);
 	}
 
-	bool lambertian_scatter(const ray& r_in, const hit_record& rec, vec3& attenuation, ray& scattered, const RandAccessor& rand) const {
+	__device__ bool lambertian_scatter(const ray& r_in, const hit_record& rec, vec3& attenuation, ray& scattered, const RandAccessor& rand) const {
 		vec3 target = rec.p + rec.normal + random_in_unit_sphere(rand);
 		scattered = ray(rec.p, target - rec.p);
 		attenuation = albedo;
 		return true;
 	}
-	bool metal_scatter(const ray& r_in, const hit_record& rec, vec3& attenuation, ray& scattered, const RandAccessor& rand) const {
+	__device__ bool metal_scatter(const ray& r_in, const hit_record& rec, vec3& attenuation, ray& scattered, const RandAccessor& rand) const {
 		vec3 reflected = reflect(unit_vector(r_in.direction()), rec.normal);
 		scattered = ray(rec.p, reflected + fuzz * random_in_unit_sphere(rand));
 		attenuation = albedo;
 		return (dot(scattered.direction(), rec.normal) > 0);
 	}
-	bool dielectric_scatter(const ray& r_in, const hit_record& rec, vec3& attenuation, ray& scattered, const RandAccessor& rand) const {
+	__device__ bool dielectric_scatter(const ray& r_in, const hit_record& rec, vec3& attenuation, ray& scattered, const RandAccessor& rand) const {
 		vec3 outward_normal;
 		vec3 reflected = reflect(r_in.direction(), rec.normal);
 		float ni_over_nt;
@@ -423,13 +431,13 @@ class sphere {
 public:
 	sphere() = default;
 	sphere(vec3 cen, float r, material m) : center(cen), radius(r), mat(m) {};
-	bool hit(const ray& r, float tmin, float tmax, hit_record& rec) const;
+	__device__ bool hit(const ray& r, float tmin, float tmax, hit_record& rec) const;
 	vec3 center;
 	float radius;
 	material mat;
 };
 
-bool sphere::hit(const ray& r, float t_min, float t_max, hit_record& rec) const {
+__device__ bool sphere::hit(const ray& r, float t_min, float t_max, hit_record& rec) const {
 	vec3 oc = r.origin() - center;
 	float a = dot(r.direction(), r.direction());
 	float b = dot(oc, r.direction());
@@ -456,11 +464,11 @@ bool sphere::hit(const ray& r, float t_min, float t_max, hit_record& rec) const 
 	return false;
 }
 
-bool world_hit(std::vector <sphere>& world, const ray& r, float tmin, float tmax, hit_record& rec){
+__device__ bool world_hit(sphere* world, size_t world_size, const ray& r, float tmin, float tmax, hit_record& rec){
 	hit_record temp_rec;
 	bool hit_anything = false;
 	double closest_so_far = tmax;
-	for (int i = 0; i < world.size(); i++) {
+	for (int i = 0; i < world_size; i++) {
 		if (world[i].hit(r, tmin, closest_so_far, temp_rec)) {
 			hit_anything = true;
 			closest_so_far = temp_rec.t;
@@ -470,13 +478,14 @@ bool world_hit(std::vector <sphere>& world, const ray& r, float tmin, float tmax
 	return hit_anything;
 }
 
-vec3 color(const ray& r, std::vector <sphere>& world, int depth, const RandAccessor& rand) {
+/*
+__device__ vec3 color(const ray& r, sphere* world, size_t world_size, int depth, const RandAccessor& rand) {
 	hit_record rec;
-	if (world_hit(world, r, 0.001, FLT_MAX, rec)) {
+	if (world_hit(world, world_size, r, 0.001, FLT_MAX, rec)) {
 		ray scattered;
 		vec3 attenuation;
 		if (depth < 50 && rec.mat->scatter(r, rec, attenuation, scattered, rand)) {
-			return attenuation * color(scattered, world, depth + 1, rand);
+			return attenuation * color(scattered, world, world_size, depth + 1, rand);
 		}
 		else {
 			return vec3(0, 0, 0);
@@ -488,12 +497,45 @@ vec3 color(const ray& r, std::vector <sphere>& world, int depth, const RandAcces
 		return (1.0 - t) * vec3(1.0, 1.0, 1.0) + t * vec3(0.5, 0.7, 1.0);
 	}
 }
+*/
+
+__device__ vec3 color_loop(const ray& r, sphere* world, size_t world_size, const RandAccessor& rand) {
+	vec3 attenuation_result;
+	ray temp = r;
+	for(int i=0; i<50; ++i)
+	{
+		hit_record rec;
+		if (world_hit(world, world_size, temp, 0.001, FLT_MAX, rec)) {
+			ray scattered;
+			vec3 attenuation;
+			if (rec.mat->scatter(temp, rec, attenuation, scattered, rand)) {
+				temp = scattered;
+				if(attenuation_result == vec3(0, 0, 0))
+					attenuation_result = attenuation;
+				else
+					attenuation_result *= attenuation;
+			}
+			else
+			{
+				attenuation_result = vec3(0, 0, 0);
+				break;
+			}
+		}
+		else {
+			vec3 unit_direction = unit_vector(temp.direction());
+			float t = 0.5 * (unit_direction.y() + 1.0);
+			attenuation_result *= (1.0 - t) * vec3(1.0, 1.0, 1.0) + t * vec3(0.5, 0.7, 1.0);
+			break;
+		}
+	}
+	return attenuation_result;
+}
+
 
 
 std::vector<sphere>  random_scene() {
 	std::vector<sphere> list;
 	list.push_back(sphere(vec3(0, -1000, 0), 1000, material(material_type::lambertian,  vec3(0.5, 0.5, 0.5), 0.0f, 0.0f)));
-	int i = 1;
 	for (int a = -11; a < 11; a++) {
 		for (int b = -11; b < 11; b++) {
 			float choose_mat = RandomNumGen::GetRand();
@@ -520,13 +562,57 @@ std::vector<sphere>  random_scene() {
 	return list;
 }
 
-int main() {
-	int nx = 256;
-	int ny = 256;
-	int ns = 50;
+__global__ void raytrace(float* dev_arr, size_t* dev_arr_size, sphere* dev_sphere, size_t* dev_sphere_size, unsigned int* dev_pixelsSrc, size_t* dev_pixelsSrc_size, camera* dev_camera, int* nx, int* ny, int* ns)
+{
+	/*
+	int thread_index = blockIdx.x * blockDim.x + threadIdx.x;
+	if (thread_index >= *dev_pixelsSrc_size)
+	{
+		return;
+	}
+	*/
+	// Remap workgroup and thread ID to an x-y coordinate on a 2D raster
+	int x = blockIdx.x * blockDim.x + threadIdx.x;
+	int y = blockIdx.y * blockDim.y + threadIdx.y;
+	if (x >= *nx || y >= *ny)
+	{
+		return;
+	}
+	int thread_index = y * (*nx) + x;
+	if (thread_index >= *dev_pixelsSrc_size)
+	{
+		return;
+	}
+	unsigned int& pixel = dev_pixelsSrc[thread_index];
 
-	timer stopwatch;
-	stopwatch.start("ray_tracer_init");
+	int j = pixel & 0xffff;
+	int i = (pixel & 0xffff0000) >> 16;
+
+	RandAccessor rand(0, dev_arr, *dev_arr_size);
+
+	vec3 col(0, 0, 0);
+	for (int s = 0; s < *ns; s++) {
+		float u = float(i + rand.Get()) / float(*nx);
+		float v = float(j + rand.Get()) / float(*ny);
+		ray r = dev_camera->get_ray(u, v, rand);
+		col += color_loop(r, dev_sphere, *dev_sphere_size, rand);
+	}
+	col /= float(*ns);
+	col = vec3(sqrt(col[0]), sqrt(col[1]), sqrt(col[2]));
+	int ir = int(255.99 * col[0]);
+	int ig = int(255.99 * col[1]);
+	int ib = int(255.99 * col[2]);
+
+	pixel = (0xff000000 | (ib << 16) | (ig << 8) | ir);
+}
+
+int main() {
+	int nx = 512;
+	int ny = 512;
+	int ns = 200;
+
+	//timer stopwatch;
+	//stopwatch.start("ray_tracer_init");
 
 	std::vector<sphere> world;
 	float R = cos(M_PI / 4);
@@ -559,13 +645,150 @@ int main() {
 
 	PreGenerated preGenerated(5000);
 	const auto& vec = preGenerated.GetVector();
-	const float* arr = vec.data();
-	size_t rand_size = vec.size();
 
-	stopwatch.stop();
+	float* dev_arr = NULL;
+	sphere* dev_sphere = NULL;
+	unsigned int* dev_pixelsSrc = NULL;
+	camera* dev_camera = NULL;
 
-	stopwatch.start("ray_tracer");
+	size_t* dev_arr_size= NULL;
+	size_t* dev_sphere_size = NULL;
+	size_t* dev_pixelsSrc_size = NULL;
+	int* dev_nx = NULL;
+	int* dev_ny = NULL;
+	int* dev_ns = NULL;
 
+	cudaError_t cudaStatus;
+
+	// Choose which GPU to run on, change this on a multi-GPU system.
+	cudaStatus = cudaSetDevice(0);
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "cudaSetDevice failed!  Do you have a CUDA-capable GPU installed?");
+		return 1;
+	}
+
+	cudaStatus = cudaMalloc((void**)&dev_arr, vec.size() * sizeof(float));
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "cudaMalloc 1 failed!");
+		return 1;
+	}
+
+	cudaStatus = cudaMalloc((void**)&dev_sphere, world.size() * sizeof(sphere));
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "cudaMalloc 2 failed!");
+		return 1;
+	}
+
+	cudaStatus = cudaMalloc((void**)&dev_pixelsSrc, pixelsSrc.size() * sizeof(unsigned int));
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "cudaMalloc 3 failed!");
+		return 1;
+	}
+
+	cudaStatus = cudaMalloc((void**)&dev_camera, sizeof(camera));
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "cudaMalloc 4 failed!");
+		return 1;
+	}
+
+	cudaStatus = cudaMalloc((void**)&dev_arr_size, sizeof(size_t));
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "cudaMalloc 5 failed!");
+		return 1;
+	}
+	cudaStatus = cudaMalloc((void**)&dev_sphere_size, sizeof(size_t));
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "cudaMalloc 6 failed!");
+		return 1;
+	}
+	cudaStatus = cudaMalloc((void**)&dev_pixelsSrc_size, sizeof(size_t));
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "cudaMalloc 7 failed!");
+		return 1;
+	}
+	cudaStatus = cudaMalloc((void**)&dev_nx, sizeof(int));
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "cudaMalloc 8 failed!");
+		return 1;
+	}
+	cudaStatus = cudaMalloc((void**)&dev_ny, sizeof(int));
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "cudaMalloc 9 failed!");
+		return 1;
+	}
+	cudaStatus = cudaMalloc((void**)&dev_ns, sizeof(int));
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "cudaMalloc 10 failed!");
+		return 1;
+	}
+
+
+	cudaStatus = cudaMemcpy(dev_arr, vec.data(), vec.size() * sizeof(float), cudaMemcpyHostToDevice);
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "cudaMemcpy 1 failed!");
+		return 1;
+	}
+
+	cudaStatus = cudaMemcpy(dev_sphere, world.data(), world.size() * sizeof(sphere), cudaMemcpyHostToDevice);
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "cudaMemcpy 2 failed!");
+		return 1;
+	}
+
+	cudaStatus = cudaMemcpy(dev_pixelsSrc, pixelsSrc.data(), pixelsSrc.size() * sizeof(unsigned int), cudaMemcpyHostToDevice);
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "cudaMemcpy 3 failed!");
+		return 1;
+	}
+
+	cudaStatus = cudaMemcpy(dev_camera, &cam, sizeof(camera), cudaMemcpyHostToDevice);
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "cudaMemcpy 4 failed!");
+		return 1;
+	}
+	//////////////////
+	size_t arr_size = vec.size();
+	cudaStatus = cudaMemcpy(dev_arr_size, &arr_size, sizeof(size_t), cudaMemcpyHostToDevice);
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "cudaMemcpy 5 failed!");
+		return 1;
+	}
+	size_t sphere_size = world.size();
+	cudaStatus = cudaMemcpy(dev_sphere_size, &sphere_size, sizeof(size_t), cudaMemcpyHostToDevice);
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "cudaMemcpy 6 failed!");
+		return 1;
+	}
+	size_t pixelsSrc_size = pixelsSrc.size();
+	cudaStatus = cudaMemcpy(dev_pixelsSrc_size, &pixelsSrc_size, sizeof(size_t), cudaMemcpyHostToDevice);
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "cudaMemcpy 7 failed!");
+		return 1;
+	}
+
+	cudaStatus = cudaMemcpy(dev_nx, &nx, sizeof(int), cudaMemcpyHostToDevice);
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "cudaMemcpy 8 failed!");
+		return 1;
+	}
+	cudaStatus = cudaMemcpy(dev_ny, &ny, sizeof(int), cudaMemcpyHostToDevice);
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "cudaMemcpy 9 failed!");
+		return 1;
+	}
+	cudaStatus = cudaMemcpy(dev_ns, &ns, sizeof(int), cudaMemcpyHostToDevice);
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "cudaMemcpy 10 failed!");
+		return 1;
+	}
+
+
+
+	//stopwatch.stop();
+
+	//stopwatch.start("ray_tracer");
+
+	/*
 	std::for_each(std::execution::par, pixelsSrc.begin(), pixelsSrc.end(), [&](unsigned int& pixel) {
 		int j = pixel & 0xffff;
 		int i = (pixel & 0xffff0000) >> 16;
@@ -589,8 +812,39 @@ int main() {
 		pixel = (0xff000000 | (ib << 16) | (ig << 8) | ir);
 
 	});
+	*/
 
-	stopwatch.stop();
+	dim3 workgroup_dim{ 8, 8 };
+	dim3 workgroup_count{ nx / workgroup_dim.x, ny / workgroup_dim.y };
+
+	raytrace<<<workgroup_count, workgroup_dim>>>(dev_arr, dev_arr_size, dev_sphere, dev_sphere_size, dev_pixelsSrc, dev_pixelsSrc_size, dev_camera, dev_nx, dev_ny, dev_ns);
+
+	cudaStatus = cudaDeviceSynchronize();
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "cudaDeviceSynchronize failed: %d", cudaStatus);
+		return 1;
+	}
+
+	cudaStatus = cudaMemcpy(pixelsSrc.data(), dev_pixelsSrc, pixelsSrc.size() * sizeof(unsigned int), cudaMemcpyDeviceToHost);
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "cudaMemcpy 11 failed: %d", cudaStatus);
+		return 1;
+	}
+
+	cudaFree(dev_arr);
+	cudaFree(dev_sphere);
+	cudaFree(dev_pixelsSrc);
+	cudaFree(dev_camera);
+
+	cudaFree(dev_arr_size);
+	cudaFree(dev_sphere_size);
+	cudaFree(dev_pixelsSrc_size);
+	cudaFree(dev_nx);
+	cudaFree(dev_ny);
+	cudaFree(dev_ns);
+
+
+	//stopwatch.stop();
 
 	int channels = 4;
 	stbi_write_png("c:\\temp\\ray_trace.png", nx, ny, channels, pixelsSrc.data(), nx * channels);
