@@ -626,7 +626,7 @@ int main() {
 	int ns = 600;
 
 	timer stopwatch;
-	//stopwatch.start("ray_tracer_init");
+	stopwatch.start("cpu_ray_tracer_init");
 
 	std::vector<sphere> world;
 	float R = cos(M_PI / 4);
@@ -659,6 +659,8 @@ int main() {
 
 	PreGenerated preGenerated(20000);
 	std::vector<float> vec = preGenerated.GetVector();
+
+	stopwatch.stop();
 
 #ifndef NO_CUDA
 	float* dev_arr = NULL;
@@ -795,8 +797,6 @@ int main() {
 		fprintf(stderr, "cudaMemcpy 10 failed!");
 		return 1;
 	}
-
-	//stopwatch.stop();
 
 	stopwatch.start("ray_tracer");
 
