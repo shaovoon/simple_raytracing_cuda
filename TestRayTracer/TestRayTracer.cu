@@ -9,7 +9,9 @@
 // with this software. If not, see <http://creativecommons.org/publicdomain/zero/1.0/>.
 //==================================================================================================
 
-#include <cuda_runtime.h>
+#ifndef NO_CUDA
+	#include <cuda_runtime.h>
+#endif
 #include <iostream>
 #include <cfloat>
 #define STB_IMAGE_WRITE_IMPLEMENTATION
@@ -18,7 +20,9 @@
 #include <chrono>
 #include <string>
 #include <algorithm>
-//#include <execution>
+#ifdef NO_CUDA
+	#include <execution>
+#endif
 #include <memory>
 #define _USE_MATH_DEFINES
 #include <cmath>
@@ -566,6 +570,30 @@ std::vector<sphere>  random_scene() {
 	return list;
 }
 
+__device__ void raytrace_pixel(unsigned int* dev_pixel, float* dev_arr, size_t* dev_arr_size, sphere* dev_sphere, size_t* dev_sphere_size, camera* dev_camera, int* nx, int* ny, int* ns)
+{
+	int j = (*dev_pixel) & 0xffff;
+	int i = ((*dev_pixel) & 0xffff0000) >> 16;
+
+	RandAccessor rand(0, dev_arr, *dev_arr_size);
+
+	vec3 col(0, 0, 0);
+	for (int s = 0; s < *ns; s++) {
+		float u = float(i + rand.Get()) / float(*nx);
+		float v = float(j + rand.Get()) / float(*ny);
+		ray r = dev_camera->get_ray(u, v, rand);
+		col += color_loop(r, dev_sphere, *dev_sphere_size, rand);
+	}
+	col /= float(*ns);
+	col = vec3(sqrt(col[0]), sqrt(col[1]), sqrt(col[2]));
+	int ir = int(255.99 * col[0]);
+	int ig = int(255.99 * col[1]);
+	int ib = int(255.99 * col[2]);
+
+	*dev_pixel = (0xff000000 | (ib << 16) | (ig << 8) | ir);
+}
+
+#ifndef NO_CUDA
 __global__ void raytrace(float* dev_arr, size_t* dev_arr_size, sphere* dev_sphere, size_t* dev_sphere_size, unsigned int* dev_pixelsSrc, size_t* dev_pixelsSrc_size, camera* dev_camera, int* nx, int* ny, int* ns)
 {
 	/*
@@ -588,27 +616,9 @@ __global__ void raytrace(float* dev_arr, size_t* dev_arr_size, sphere* dev_spher
 		return;
 	}
 	unsigned int& pixel = dev_pixelsSrc[thread_index];
-
-	int j = pixel & 0xffff;
-	int i = (pixel & 0xffff0000) >> 16;
-
-	RandAccessor rand(0, dev_arr, *dev_arr_size);
-
-	vec3 col(0, 0, 0);
-	for (int s = 0; s < *ns; s++) {
-		float u = float(i + rand.Get()) / float(*nx);
-		float v = float(j + rand.Get()) / float(*ny);
-		ray r = dev_camera->get_ray(u, v, rand);
-		col += color_loop(r, dev_sphere, *dev_sphere_size, rand);
-	}
-	col /= float(*ns);
-	col = vec3(sqrt(col[0]), sqrt(col[1]), sqrt(col[2]));
-	int ir = int(255.99 * col[0]);
-	int ig = int(255.99 * col[1]);
-	int ib = int(255.99 * col[2]);
-
-	pixel = (0xff000000 | (ib << 16) | (ig << 8) | ir);
+	raytrace_pixel(&pixel, dev_arr, dev_arr_size, dev_sphere, dev_sphere_size, dev_camera, nx, ny, ns);
 }
+#endif
 
 int main() {
 	int nx = 256;
@@ -648,8 +658,9 @@ int main() {
 	}
 
 	PreGenerated preGenerated(5000);
-	const auto& vec = preGenerated.GetVector();
+	std::vector<float> vec = preGenerated.GetVector();
 
+#ifndef NO_CUDA
 	float* dev_arr = NULL;
 	sphere* dev_sphere = NULL;
 	unsigned int* dev_pixelsSrc = NULL;
@@ -726,7 +737,6 @@ int main() {
 		return 1;
 	}
 
-
 	cudaStatus = cudaMemcpy(dev_arr, vec.data(), vec.size() * sizeof(float), cudaMemcpyHostToDevice);
 	if (cudaStatus != cudaSuccess) {
 		fprintf(stderr, "cudaMemcpy 1 failed!");
@@ -750,7 +760,7 @@ int main() {
 		fprintf(stderr, "cudaMemcpy 4 failed!");
 		return 1;
 	}
-	//////////////////
+
 	size_t arr_size = vec.size();
 	cudaStatus = cudaMemcpy(dev_arr_size, &arr_size, sizeof(size_t), cudaMemcpyHostToDevice);
 	if (cudaStatus != cudaSuccess) {
@@ -786,37 +796,9 @@ int main() {
 		return 1;
 	}
 
-
-
 	//stopwatch.stop();
 
 	stopwatch.start("ray_tracer");
-
-	/*
-	std::for_each(std::execution::par, pixelsSrc.begin(), pixelsSrc.end(), [&](unsigned int& pixel) {
-		int j = pixel & 0xffff;
-		int i = (pixel & 0xffff0000) >> 16;
-
-		RandAccessor rand(j+i, arr, rand_size);
-
-		vec3 col(0, 0, 0);
-		for (int s = 0; s < ns; s++) {
-			float u = float(i + rand.Get()) / float(nx);
-			float v = float(j + rand.Get()) / float(ny);
-			ray r = cam.get_ray(u, v, rand);
-			col += color(r, world, 0, rand);
-		}
-		col /= float(ns);
-		col = vec3(sqrt(col[0]), sqrt(col[1]), sqrt(col[2]));
-		int ir = int(255.99 * col[0]);
-		int ig = int(255.99 * col[1]);
-		int ib = int(255.99 * col[2]);
-
-		int index = ((ny - 1) - j) * stride + i;
-		pixel = (0xff000000 | (ib << 16) | (ig << 8) | ir);
-
-	});
-	*/
 
 	dim3 workgroup_dim{ 8, 8 };
 	dim3 workgroup_count{ nx / workgroup_dim.x, ny / workgroup_dim.y };
@@ -847,8 +829,23 @@ int main() {
 	cudaFree(dev_ny);
 	cudaFree(dev_ns);
 
+	stopwatch.stop();
+
+#else
+	stopwatch.start("ray_tracer");
+
+	std::for_each(std::execution::par, pixelsSrc.begin(), pixelsSrc.end(), [&](unsigned int& pixel) {
+	
+		size_t dev_arr_size = vec.size();
+		size_t dev_sphere_size = world.size();
+		
+		raytrace_pixel(&pixel, vec.data(), &dev_arr_size, world.data(), &dev_sphere_size, &cam, &nx, &ny, &ns);
+	});
 
 	stopwatch.stop();
+
+#endif
+
 
 	int channels = 4;
 	stbi_write_png("c:\\temp\\ray_trace.png", nx, ny, channels, pixelsSrc.data(), nx * channels);
