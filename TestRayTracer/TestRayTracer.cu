@@ -575,7 +575,7 @@ __device__ void raytrace_pixel(unsigned int* dev_pixel, float* dev_arr, size_t* 
 	int j = (*dev_pixel) & 0xffff;
 	int i = ((*dev_pixel) & 0xffff0000) >> 16;
 
-	RandAccessor rand(0, dev_arr, *dev_arr_size);
+	RandAccessor rand(i+j*(*nx), dev_arr, *dev_arr_size);
 
 	vec3 col(0, 0, 0);
 	for (int s = 0; s < *ns; s++) {
@@ -623,7 +623,7 @@ __global__ void raytrace(float* dev_arr, size_t* dev_arr_size, sphere* dev_spher
 int main() {
 	int nx = 256;
 	int ny = 256;
-	int ns = 50;
+	int ns = 600;
 
 	timer stopwatch;
 	//stopwatch.start("ray_tracer_init");
@@ -657,7 +657,7 @@ int main() {
 		}
 	}
 
-	PreGenerated preGenerated(5000);
+	PreGenerated preGenerated(20000);
 	std::vector<float> vec = preGenerated.GetVector();
 
 #ifndef NO_CUDA
