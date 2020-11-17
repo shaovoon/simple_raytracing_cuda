@@ -597,7 +597,6 @@ __global__ void raytrace(float* dev_arr, size_t* dev_arr_size, sphere* dev_spher
 		return;
 	}
 	*/
-	// Remap workgroup and thread ID to an x-y coordinate on a 2D raster
 	int x = blockIdx.x * blockDim.x + threadIdx.x;
 	int y = blockIdx.y * blockDim.y + threadIdx.y;
 	if (x >= *nx || y >= *ny)
