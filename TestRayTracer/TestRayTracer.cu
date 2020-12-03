@@ -564,21 +564,21 @@ std::vector<sphere>  random_scene() {
 	return list;
 }
 
-__device__ void raytrace_pixel(unsigned int* dev_pixel, float* dev_arr, size_t* dev_arr_size, sphere* dev_sphere, size_t* dev_sphere_size, camera* dev_camera, int* nx, int* ny, int* ns)
+__device__ void raytrace_pixel(unsigned int* dev_pixel, float* dev_arr, size_t dev_arr_size, sphere* dev_sphere, size_t dev_sphere_size, camera* dev_camera, int nx, int ny, int ns)
 {
 	int j = (*dev_pixel) & 0xffff;
 	int i = ((*dev_pixel) & 0xffff0000) >> 16;
 
-	RandAccessor rand(i+j*(*nx), dev_arr, *dev_arr_size);
+	RandAccessor rand(i+j*nx, dev_arr, dev_arr_size);
 
 	vec3 col(0, 0, 0);
-	for (int s = 0; s < *ns; s++) {
-		float u = float(i + rand.Get()) / float(*nx);
-		float v = float(j + rand.Get()) / float(*ny);
+	for (int s = 0; s < ns; s++) {
+		float u = float(i + rand.Get()) / float(nx);
+		float v = float(j + rand.Get()) / float(ny);
 		ray r = dev_camera->get_ray(u, v, rand);
-		col += color_loop(r, dev_sphere, *dev_sphere_size, rand);
+		col += color_loop(r, dev_sphere, dev_sphere_size, rand);
 	}
-	col /= float(*ns);
+	col /= float(ns);
 	col = vec3(sqrt(col[0]), sqrt(col[1]), sqrt(col[2]));
 	int ir = int(255.99 * col[0]);
 	int ig = int(255.99 * col[1]);
@@ -588,7 +588,7 @@ __device__ void raytrace_pixel(unsigned int* dev_pixel, float* dev_arr, size_t* 
 }
 
 #ifndef NO_CUDA
-__global__ void raytrace(float* dev_arr, size_t* dev_arr_size, sphere* dev_sphere, size_t* dev_sphere_size, unsigned int* dev_pixelsSrc, size_t* dev_pixelsSrc_size, camera* dev_camera, int* nx, int* ny, int* ns)
+__global__ void raytrace(float* dev_arr, size_t dev_arr_size, sphere* dev_sphere, size_t dev_sphere_size, unsigned int* dev_pixelsSrc, size_t dev_pixelsSrc_size, camera* dev_camera, int nx, int ny, int ns)
 {
 	/*
 	int thread_index = blockIdx.x * blockDim.x + threadIdx.x;
@@ -599,12 +599,12 @@ __global__ void raytrace(float* dev_arr, size_t* dev_arr_size, sphere* dev_spher
 	*/
 	int x = blockIdx.x * blockDim.x + threadIdx.x;
 	int y = blockIdx.y * blockDim.y + threadIdx.y;
-	if (x >= *nx || y >= *ny)
+	if (x >= nx || y >= ny)
 	{
 		return;
 	}
-	int thread_index = y * (*nx) + x;
-	if (thread_index >= *dev_pixelsSrc_size)
+	int thread_index = y * nx + x;
+	if (thread_index >= dev_pixelsSrc_size)
 	{
 		return;
 	}
@@ -655,18 +655,15 @@ int main() {
 
 	stopwatch.stop();
 
+	size_t arr_size = vec.size();
+	size_t sphere_size = world.size();
+	size_t pixelsSrc_size = pixelsSrc.size();
+
 #ifndef NO_CUDA
 	float* dev_arr = NULL;
 	sphere* dev_sphere = NULL;
 	unsigned int* dev_pixelsSrc = NULL;
 	camera* dev_camera = NULL;
-
-	size_t* dev_arr_size= NULL;
-	size_t* dev_sphere_size = NULL;
-	size_t* dev_pixelsSrc_size = NULL;
-	int* dev_nx = NULL;
-	int* dev_ny = NULL;
-	int* dev_ns = NULL;
 
 	cudaError_t cudaStatus;
 
@@ -701,37 +698,6 @@ int main() {
 		return 1;
 	}
 
-	cudaStatus = cudaMalloc((void**)&dev_arr_size, sizeof(size_t));
-	if (cudaStatus != cudaSuccess) {
-		fprintf(stderr, "cudaMalloc 5 failed!");
-		return 1;
-	}
-	cudaStatus = cudaMalloc((void**)&dev_sphere_size, sizeof(size_t));
-	if (cudaStatus != cudaSuccess) {
-		fprintf(stderr, "cudaMalloc 6 failed!");
-		return 1;
-	}
-	cudaStatus = cudaMalloc((void**)&dev_pixelsSrc_size, sizeof(size_t));
-	if (cudaStatus != cudaSuccess) {
-		fprintf(stderr, "cudaMalloc 7 failed!");
-		return 1;
-	}
-	cudaStatus = cudaMalloc((void**)&dev_nx, sizeof(int));
-	if (cudaStatus != cudaSuccess) {
-		fprintf(stderr, "cudaMalloc 8 failed!");
-		return 1;
-	}
-	cudaStatus = cudaMalloc((void**)&dev_ny, sizeof(int));
-	if (cudaStatus != cudaSuccess) {
-		fprintf(stderr, "cudaMalloc 9 failed!");
-		return 1;
-	}
-	cudaStatus = cudaMalloc((void**)&dev_ns, sizeof(int));
-	if (cudaStatus != cudaSuccess) {
-		fprintf(stderr, "cudaMalloc 10 failed!");
-		return 1;
-	}
-
 	cudaStatus = cudaMemcpy(dev_arr, vec.data(), vec.size() * sizeof(float), cudaMemcpyHostToDevice);
 	if (cudaStatus != cudaSuccess) {
 		fprintf(stderr, "cudaMemcpy 1 failed!");
@@ -756,47 +722,12 @@ int main() {
 		return 1;
 	}
 
-	size_t arr_size = vec.size();
-	cudaStatus = cudaMemcpy(dev_arr_size, &arr_size, sizeof(size_t), cudaMemcpyHostToDevice);
-	if (cudaStatus != cudaSuccess) {
-		fprintf(stderr, "cudaMemcpy 5 failed!");
-		return 1;
-	}
-	size_t sphere_size = world.size();
-	cudaStatus = cudaMemcpy(dev_sphere_size, &sphere_size, sizeof(size_t), cudaMemcpyHostToDevice);
-	if (cudaStatus != cudaSuccess) {
-		fprintf(stderr, "cudaMemcpy 6 failed!");
-		return 1;
-	}
-	size_t pixelsSrc_size = pixelsSrc.size();
-	cudaStatus = cudaMemcpy(dev_pixelsSrc_size, &pixelsSrc_size, sizeof(size_t), cudaMemcpyHostToDevice);
-	if (cudaStatus != cudaSuccess) {
-		fprintf(stderr, "cudaMemcpy 7 failed!");
-		return 1;
-	}
-
-	cudaStatus = cudaMemcpy(dev_nx, &nx, sizeof(int), cudaMemcpyHostToDevice);
-	if (cudaStatus != cudaSuccess) {
-		fprintf(stderr, "cudaMemcpy 8 failed!");
-		return 1;
-	}
-	cudaStatus = cudaMemcpy(dev_ny, &ny, sizeof(int), cudaMemcpyHostToDevice);
-	if (cudaStatus != cudaSuccess) {
-		fprintf(stderr, "cudaMemcpy 9 failed!");
-		return 1;
-	}
-	cudaStatus = cudaMemcpy(dev_ns, &ns, sizeof(int), cudaMemcpyHostToDevice);
-	if (cudaStatus != cudaSuccess) {
-		fprintf(stderr, "cudaMemcpy 10 failed!");
-		return 1;
-	}
-
 	stopwatch.start("ray_tracer");
 
 	dim3 workgroup_dim{ 8, 8 };
 	dim3 workgroup_count{ nx / workgroup_dim.x, ny / workgroup_dim.y };
 
-	raytrace<<<workgroup_count, workgroup_dim>>>(dev_arr, dev_arr_size, dev_sphere, dev_sphere_size, dev_pixelsSrc, dev_pixelsSrc_size, dev_camera, dev_nx, dev_ny, dev_ns);
+	raytrace<<<workgroup_count, workgroup_dim>>>(dev_arr, arr_size, dev_sphere, sphere_size, dev_pixelsSrc, pixelsSrc_size, dev_camera, nx, ny, ns);
 
 	cudaStatus = cudaDeviceSynchronize();
 	if (cudaStatus != cudaSuccess) {
@@ -815,13 +746,6 @@ int main() {
 	cudaFree(dev_pixelsSrc);
 	cudaFree(dev_camera);
 
-	cudaFree(dev_arr_size);
-	cudaFree(dev_sphere_size);
-	cudaFree(dev_pixelsSrc_size);
-	cudaFree(dev_nx);
-	cudaFree(dev_ny);
-	cudaFree(dev_ns);
-
 	stopwatch.stop();
 
 #else
@@ -832,7 +756,7 @@ int main() {
 		size_t dev_arr_size = vec.size();
 		size_t dev_sphere_size = world.size();
 		
-		raytrace_pixel(&pixel, vec.data(), &dev_arr_size, world.data(), &dev_sphere_size, &cam, &nx, &ny, &ns);
+		raytrace_pixel(&pixel, vec.data(), arr_size, world.data(), sphere_size, &cam, nx, ny, ns);
 	});
 
 	stopwatch.stop();
