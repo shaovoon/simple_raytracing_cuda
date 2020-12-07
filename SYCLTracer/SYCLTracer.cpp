@@ -649,7 +649,7 @@ int main() {
 			});
 
 		});
-
+	Q.wait();
 
 	host_accessor<unsigned int, 1> host_pixelsSrc(dev_pixelsSrc, read_only);
 	for (size_t i = 0; i < pixelsSrc.size(); ++i)
