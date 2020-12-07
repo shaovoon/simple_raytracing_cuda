@@ -559,29 +559,6 @@ std::vector<sphere>  random_scene() {
 	return list;
 }
 
- void raytrace_pixel(unsigned int* dev_pixel, float* dev_arr, size_t dev_arr_size, sphere* dev_sphere, size_t dev_sphere_size, camera* dev_camera, int nx, int ny, int ns)
-{
-	int j = (*dev_pixel) & 0xffff;
-	int i = ((*dev_pixel) & 0xffff0000) >> 16;
-
-	RandAccessor rand(i + j * nx, dev_arr, dev_arr_size);
-
-	vec3 col(0, 0, 0);
-	for (int s = 0; s < ns; s++) {
-		float u = float(i + rand.Get()) / float(nx);
-		float v = float(j + rand.Get()) / float(ny);
-		ray r = dev_camera->get_ray(u, v, rand);
-		col += color_loop(r, dev_sphere, dev_sphere_size, rand);
-	}
-	col /= float(ns);
-	col = vec3(sqrt(col[0]), sqrt(col[1]), sqrt(col[2]));
-	int ir = int(255.99 * col[0]);
-	int ig = int(255.99 * col[1]);
-	int ib = int(255.99 * col[2]);
-
-	*dev_pixel = (0xff000000 | (ib << 16) | (ig << 8) | ir);
-}
-
 int main() {
 	int nx = 256;
 	int ny = 256;
@@ -626,13 +603,6 @@ int main() {
 
 	size_t arr_size = vec.size();
 	size_t sphere_size = world.size();
-	size_t pixelsSrc_size = pixelsSrc.size();
-
-#ifndef NO_CUDA
-	float* dev_arr = NULL;
-	sphere* dev_sphere = NULL;
-	unsigned int* dev_pixelsSrc = NULL;
-	camera* dev_camera = NULL;
 
 	using namespace sycl;
 	std::vector<camera> temp_cam_vec{ cam };
@@ -652,7 +622,7 @@ int main() {
 		auto acc_dev_pixelsSrc =  dev_pixelsSrc.template get_access<access::mode::read_write>(h);
 		auto acc_dev_camera = dev_camera.template get_access<access::mode::read>(h);
 
-		h.parallel_for(pixelsSrc.size(), [=](id<1> i) {
+		h.parallel_for(range<1>{pixelsSrc.size()}, [=](id<1> i) {
 
 			unsigned int& pixel = acc_dev_pixelsSrc[i];
 			unsigned int* dev_pixel = &pixel;
@@ -681,29 +651,11 @@ int main() {
 		});
 
 
-	host_accessor host_pixelsSrc(dev_pixelsSrc, read_only);
+	host_accessor<unsigned int, 1> host_pixelsSrc(dev_pixelsSrc, read_only);
 	for (size_t i = 0; i < pixelsSrc.size(); ++i)
 		pixelsSrc[i] = host_pixelsSrc[i];
 
 	stopwatch.stop();
-
-#else
-	stopwatch.start("ray_tracer");
-
-	std::for_each(std::execution::par, pixelsSrc.begin(), pixelsSrc.end(), [&](unsigned int& pixel) {
-
-		size_t dev_arr_size = vec.size();
-		size_t dev_sphere_size = world.size();
-
-		raytrace_pixel(&pixel, vec.data(), arr_size, world.data(), sphere_size, &cam, nx, ny, ns);
-		});
-
-	stopwatch.stop();
-
-
-
-#endif
-
 
 	int channels = 4;
 	stbi_write_png("c:\\temp\\ray_trace.png", nx, ny, channels, pixelsSrc.data(), nx * channels);
