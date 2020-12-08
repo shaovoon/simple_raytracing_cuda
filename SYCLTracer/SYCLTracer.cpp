@@ -23,6 +23,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <random>
+#include <exception>
 #include <CL/sycl.hpp>
 #define M_PI 3.14159265358979323846264338327950288
 
@@ -604,56 +605,67 @@ int main() {
 	size_t arr_size = vec.size();
 	size_t sphere_size = world.size();
 
-	using namespace sycl;
-	std::vector<camera> temp_cam_vec{ cam };
-	queue Q(host_selector{});
-	buffer<float, 1> dev_arr{ vec.data(), range<1>(vec.size()) };
-	buffer<sphere, 1> dev_sphere{ world.data(), range<1>(world.size()) };
-	buffer<unsigned int, 1> dev_pixelsSrc{ pixelsSrc.data(), range<1>(pixelsSrc.size()) };
-	buffer<camera, 1> dev_camera{ &cam, , range<1>(1) };
-
 
 	stopwatch.start("ray_tracer");
 
+	try {
+		using namespace sycl;
+		queue Q(host_selector{});
+		buffer<float, 1> dev_arr{ vec.data(), range<1>(vec.size()) };
+		buffer<sphere, 1> dev_sphere{ world.data(), range<1>(world.size()) };
+		buffer<unsigned int, 1> dev_pixelsSrc{ pixelsSrc.data(), range<1>(pixelsSrc.size()) };
+		buffer<camera, 1> dev_camera{ &cam, , range<1>(1) };
 
-	Q.submit([&](handler& h) {
-		auto acc_dev_arr = dev_arr.template get_access<access::mode::read>(h);
-		auto acc_dev_sphere = dev_sphere.template get_access<access::mode::read>(h);
-		auto acc_dev_pixelsSrc =  dev_pixelsSrc.template get_access<access::mode::read_write>(h);
-		auto acc_dev_camera = dev_camera.template get_access<access::mode::read>(h);
+		Q.submit([&](handler& h) {
+			auto acc_dev_arr = dev_arr.template get_access<access::mode::read>(h);
+			auto acc_dev_sphere = dev_sphere.template get_access<access::mode::read>(h);
+			auto acc_dev_pixelsSrc =  dev_pixelsSrc.template get_access<access::mode::read_write>(h);
+			auto acc_dev_camera = dev_camera.template get_access<access::mode::read>(h);
 
-		h.parallel_for(range<1>{pixelsSrc.size()}, [=](id<1> i) {
+			h.parallel_for(range<1>{pixelsSrc.size()}, [=](id<1> i) {
 
-			unsigned int& pixel = acc_dev_pixelsSrc[i];
-			unsigned int* dev_pixel = &pixel;
-			int j = (*dev_pixel) & 0xffff;
-			int i = ((*dev_pixel) & 0xffff0000) >> 16;
+				unsigned int& pixel = acc_dev_pixelsSrc[i];
+				unsigned int* dev_pixel = &pixel;
+				int j = (*dev_pixel) & 0xffff;
+				int i = ((*dev_pixel) & 0xffff0000) >> 16;
 
-			RandAccessor rand(i + j * nx, acc_dev_arr.get_pointer(), arr_size);
+				RandAccessor rand(i + j * nx, acc_dev_arr.get_pointer(), arr_size);
 
-			vec3 col(0, 0, 0);
-			for (int s = 0; s < ns; s++) {
-				float u = float(i + rand.Get()) / float(nx);
-				float v = float(j + rand.Get()) / float(ny);
-				ray r = acc_dev_camera[0]->get_ray(u, v, rand);
-				col += color_loop(r, acc_dev_sphere.get_pointer(), sphere_size, rand);
-			}
-			col /= float(ns);
-			col = vec3(sqrt(col[0]), sqrt(col[1]), sqrt(col[2]));
-			int ir = int(255.99 * col[0]);
-			int ig = int(255.99 * col[1]);
-			int ib = int(255.99 * col[2]);
+				vec3 col(0, 0, 0);
+				for (int s = 0; s < ns; s++) {
+					float u = float(i + rand.Get()) / float(nx);
+					float v = float(j + rand.Get()) / float(ny);
+					ray r = acc_dev_camera[0]->get_ray(u, v, rand);
+					col += color_loop(r, acc_dev_sphere.get_pointer(), sphere_size, rand);
+				}
+				col /= float(ns);
+				col = vec3(sqrt(col[0]), sqrt(col[1]), sqrt(col[2]));
+				int ir = int(255.99 * col[0]);
+				int ig = int(255.99 * col[1]);
+				int ib = int(255.99 * col[2]);
 
-			acc_dev_pixelsSrc[i] = (0xff000000 | (ib << 16) | (ig << 8) | ir);
+				acc_dev_pixelsSrc[i] = (0xff000000 | (ib << 16) | (ig << 8) | ir);
+
+				});
 
 			});
+		Q.wait();
 
-		});
-	Q.wait();
+		host_accessor<unsigned int, 1> host_pixelsSrc(dev_pixelsSrc, read_only);
+		for (size_t i = 0; i < pixelsSrc.size(); ++i)
+			pixelsSrc[i] = host_pixelsSrc[i];
 
-	host_accessor<unsigned int, 1> host_pixelsSrc(dev_pixelsSrc, read_only);
-	for (size_t i = 0; i < pixelsSrc.size(); ++i)
-		pixelsSrc[i] = host_pixelsSrc[i];
+	}
+	catch (sycl::exception& ex)
+	{
+		std::cerr << "SYCL Exception thrown: " << ex.what() << std::endl;
+	}
+	catch (std::exception& ex)
+	{
+		std::cerr << "std Exception thrown: " << ex.what() << std::endl;
+	}
+	std::cout << "\nDone!\n";
+
 
 	stopwatch.stop();
 
