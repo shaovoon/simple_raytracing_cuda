@@ -765,7 +765,7 @@ int main() {
 
 
 	int channels = 4;
-	stbi_write_png("c:\\temp\\ray_trace.png", nx, ny, channels, pixelsSrc.data(), nx * channels);
+	stbi_write_png("ray_trace.png", nx, ny, channels, pixelsSrc.data(), nx * channels);
 
 	return 0;
 }

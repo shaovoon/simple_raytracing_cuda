@@ -643,7 +643,7 @@ int main() {
 				int ig = int(255.99 * col[1]);
 				int ib = int(255.99 * col[2]);
 
-				acc_dev_pixelsSrc[i] = (0xff000000 | (ib << 16) | (ig << 8) | ir);
+				acc_dev_pixelsSrc[index] = (0xff000000 | (ib << 16) | (ig << 8) | ir);
 
 				});
 
@@ -670,7 +670,7 @@ int main() {
 	stopwatch.stop();
 
 	int channels = 4;
-	stbi_write_png("c:\\temp\\ray_trace.png", nx, ny, channels, pixelsSrc.data(), nx * channels);
+	stbi_write_png("ray_trace.png", nx, ny, channels, pixelsSrc.data(), nx * channels);
 
 	return 0;
 }
