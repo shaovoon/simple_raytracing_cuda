@@ -25,7 +25,6 @@
 #include <random>
 #include <exception>
 #include <CL/sycl.hpp>
-#define M_PI 3.14159265358979323846264338327950288
 
 class timer
 {
@@ -614,7 +613,7 @@ int main() {
 		buffer<float, 1> dev_arr{ vec.data(), range<1>(vec.size()) };
 		buffer<sphere, 1> dev_sphere{ world.data(), range<1>(world.size()) };
 		buffer<unsigned int, 1> dev_pixelsSrc{ pixelsSrc.data(), range<1>(pixelsSrc.size()) };
-		buffer<camera, 1> dev_camera{ &cam, , range<1>(1) };
+		buffer<camera, 1> dev_camera{ &cam, range<1>(1) };
 
 		Q.submit([&](handler& h) {
 			auto acc_dev_arr = dev_arr.template get_access<access::mode::read>(h);
@@ -622,9 +621,9 @@ int main() {
 			auto acc_dev_pixelsSrc =  dev_pixelsSrc.template get_access<access::mode::read_write>(h);
 			auto acc_dev_camera = dev_camera.template get_access<access::mode::read>(h);
 
-			h.parallel_for(range<1>{pixelsSrc.size()}, [=](id<1> i) {
+			h.parallel_for<class nstream>(range<1>{pixelsSrc.size()}, [=](id<1> index) {
 
-				unsigned int& pixel = acc_dev_pixelsSrc[i];
+				unsigned int& pixel = acc_dev_pixelsSrc[index];
 				unsigned int* dev_pixel = &pixel;
 				int j = (*dev_pixel) & 0xffff;
 				int i = ((*dev_pixel) & 0xffff0000) >> 16;
@@ -635,7 +634,7 @@ int main() {
 				for (int s = 0; s < ns; s++) {
 					float u = float(i + rand.Get()) / float(nx);
 					float v = float(j + rand.Get()) / float(ny);
-					ray r = acc_dev_camera[0]->get_ray(u, v, rand);
+					ray r = acc_dev_camera.get_pointer()->get_ray(u, v, rand);
 					col += color_loop(r, acc_dev_sphere.get_pointer(), sphere_size, rand);
 				}
 				col /= float(ns);
@@ -651,9 +650,10 @@ int main() {
 			});
 		Q.wait();
 
-		host_accessor<unsigned int, 1> host_pixelsSrc(dev_pixelsSrc, read_only);
-		for (size_t i = 0; i < pixelsSrc.size(); ++i)
-			pixelsSrc[i] = host_pixelsSrc[i];
+		dev_pixelsSrc.get_access<access::mode::read>(); // <--- Host Accessor to Synchronize Memory
+		//host_accessor<unsigned int, 1> host_pixelsSrc(dev_pixelsSrc, mode_tag_t<access_mode::read>);
+		//for (size_t i = 0; i < pixelsSrc.size(); ++i)
+			//pixelsSrc[i] = host_pixelsSrc[i];
 
 	}
 	catch (sycl::exception& ex)

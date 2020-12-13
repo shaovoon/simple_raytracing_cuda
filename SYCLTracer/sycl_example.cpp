@@ -25,13 +25,13 @@ int main(){
 			auto accB = B.template get_access<access::mode::write>(h);
 			h.parallel_for<class nstream>(
 				range<1>{N},
-				[=](id<1> i) { accB[i] = accA[i]; }
+				[=](id<1> i) { accB[i] = accA[i]; });
 			
 		});
 		Q.wait();
-		host_accessor<int, 1> host_accB(B, read_only);
+		B.get_access<access::mode::read>(); // <--- Host Accessor to Synchronize Memory
 		for(int i=0; i< N; ++i) {
-			std::cout << host_accB[i] << " ";
+			std::cout << b[i] << " ";
 		}
 	}
 	catch(sycl::exception& ex)
