@@ -565,7 +565,7 @@ int main() {
 	int ns = 600;
 
 	timer stopwatch;
-	stopwatch.start("cpu_ray_tracer_init");
+	stopwatch.start("ray_tracer_init");
 
 	std::vector<sphere> world;
 	float R = cos(M_PI / 4);
@@ -609,7 +609,8 @@ int main() {
 
 	try {
 		using namespace sycl;
-		queue Q(host_selector{});
+		queue Q(host_selector{}); // for cpu without OpenCL installed
+		//queue Q(gpu_selector{});
 		buffer<float, 1> dev_arr{ vec.data(), range<1>(vec.size()) };
 		buffer<sphere, 1> dev_sphere{ world.data(), range<1>(world.size()) };
 		buffer<unsigned int, 1> dev_pixelsSrc{ pixelsSrc.data(), range<1>(pixelsSrc.size()) };

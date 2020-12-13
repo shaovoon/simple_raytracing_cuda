@@ -619,7 +619,7 @@ int main() {
 	int ns = 600;
 
 	timer stopwatch;
-	stopwatch.start("cpu_ray_tracer_init");
+	stopwatch.start("ray_tracer_init");
 
 	std::vector<sphere> world;
 	float R = cos(M_PI / 4);
