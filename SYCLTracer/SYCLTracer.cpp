@@ -652,10 +652,6 @@ int main() {
 		Q.wait();
 
 		dev_pixelsSrc.get_access<access::mode::read>(); // <--- Host Accessor to Synchronize Memory
-		//host_accessor<unsigned int, 1> host_pixelsSrc(dev_pixelsSrc, mode_tag_t<access_mode::read>);
-		//for (size_t i = 0; i < pixelsSrc.size(); ++i)
-			//pixelsSrc[i] = host_pixelsSrc[i];
-
 	}
 	catch (sycl::exception& ex)
 	{
@@ -666,7 +662,6 @@ int main() {
 		std::cerr << "std Exception thrown: " << ex.what() << std::endl;
 	}
 	std::cout << "\nDone!\n";
-
 
 	stopwatch.stop();
 
