@@ -6,4 +6,4 @@
 #define __host__
 #define __device__
 
-#include "TestRayTracer.cu"
+#include "CUDARayTracer.cu"
