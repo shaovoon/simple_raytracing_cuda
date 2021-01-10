@@ -1,2 +1,1 @@
-# simple_raytracing_cuda
-Simple Multithreaded Raytracing Ported to CUDA
+# Ray Tracing in One Weekend Ported to CUDA
